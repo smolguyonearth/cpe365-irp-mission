@@ -68,17 +68,16 @@ class Turtlebot3Controller(Node):
         # self.publishVelocityCommand(linearVelocity,angularVelocity)
         # self.publishVelocityCommand(0.0, 0.08)
 
-        print("Poke!")
-        self.publishVelocityCommand(1.0 ,0.0)
-        sleep(0.5)
-        self.publishVelocityCommand(-1.0 ,0.0)
-        sleep(0.5)
-        self.publishVelocityCommand(0.0 ,1.0)
-        sleep(8)
-        self.publishVelocityCommand(0.0 ,-1.0)
-        sleep(16)
+        print("Mission1 DumpWander!")
+        self.publishVelocityCommand(0.2, 0.0)
 
-        # print(self.valueLaserRaw.ranges[0])
+        print(self.valueLaserRaw['ranges'][0])
+        if min(self.valueLaserRaw['ranges'][0:15]) < 0.3 or min(self.valueLaserRaw['ranges'][345:]) < 0.3 and self.valueLaserRaw['ranges'][0] != 0 :
+            print("Obstacle detected, stopping!")
+            self.publishVelocityCommand(0.0, 0.0)
+        else:
+            print("No obstacle, let's go!")
+            self.publishVelocityCommand(0.2, 0.0)
 
 def robotStop():
     node = rclpy.create_node('tb3Stop')
