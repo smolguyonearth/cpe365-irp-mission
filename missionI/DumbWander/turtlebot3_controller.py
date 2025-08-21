@@ -69,10 +69,31 @@ class Turtlebot3Controller(Node):
         # self.publishVelocityCommand(0.0, 0.08)
 
         print("Mission1 DumpWander!")
-        self.publishVelocityCommand(0.2, 0.0)
+
+        def check_validation(x):
+            valid_readings = [r for r in x if r != 0]
+            if valid_readings:
+                out_range = min(valid_readings)
+                return out_range
+            else:
+                out_range = float('inf')
+                return out_range
 
         print(self.valueLaserRaw['ranges'][0])
-        if min(self.valueLaserRaw['ranges'][0:15]) < 0.3 or min(self.valueLaserRaw['ranges'][345:]) < 0.3 and self.valueLaserRaw['ranges'][0] != 0 :
+        print(self.valueLaserRaw['ranges'][5])
+        print(self.valueLaserRaw['ranges'][355])
+
+        right_valid = check_validation(self.valueLaserRaw['ranges'][0:10])
+        left_valid  = check_validation(self.valueLaserRaw['ranges'][350:])
+
+        print(right_valid)
+        print(left_valid)
+
+        # if (min(self.valueLaserRaw['ranges'][0:5]) < 0.2 or min(self.valueLaserRaw['ranges'][355:]) < 0.2) and self.valueLaserRaw['ranges'][0] != 0:
+        if (right_valid <= 0.2 or left_valid <= 0.2) and right_valid != 0 and left_valid != 0:
+        # if (self.valueLaserRaw['ranges'][5]) < 0.2 or (self.valueLaserRaw['ranges'][355]) < 0.2 or (self.valueLaserRaw['ranges'][0] < 0.2) and self.valueLaserRaw['ranges'][0:365] != 0:
+        # if self.valueLaserRaw['ranges'][0] <= 0.2 and self.valueLaserRaw['ranges'][0] != 0:
+        # if self.valueLaserRaw['ranges'][0] <= 0.2:
             print("Obstacle detected, stopping!")
             self.publishVelocityCommand(0.0, 0.0)
         else:

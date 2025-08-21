@@ -75,29 +75,46 @@ class Turtlebot3Controller(Node):
         print(self.valueLaserRaw['ranges'][270])
 
         # frontsensor = min(self.valueLaserRaw['ranges'][0:15] + self.valueLaserRaw['ranges'][345:])
-        frontsensor = min(self.valueLaserRaw['ranges'][0:5] + self.valueLaserRaw['ranges'][355:])
-        rightsensor = self.valueLaserRaw['ranges'][65:115]
-        leftsensor = self.valueLaserRaw['ranges'][245:300]
-        rearsensor = self.valueLaserRaw['ranges'][155:205]
+        # frontsensor = min(self.valueLaserRaw['ranges'][0:5] + self.valueLaserRaw['ranges'][355:])
+        rightsensor = self.valueLaserRaw['ranges'][0:180]
+        leftsensor = self.valueLaserRaw['ranges'][180:359]
+        # rearsensor = self.valueLaserRaw['ranges'][155:205]
+
+        valid_left  = [r for r in leftsensor if r != 0]
+        valid_right = [r for r in rightsensor if r != 0]
+
+        left_min  = min(valid_left) if valid_left else float('inf')
+        right_min = min(valid_right) if valid_right else float('inf')
 
         # out_range = min(rightsensor + leftsensor + rearsensor)
-        combined = rightsensor + leftsensor + rearsensor
+        # combined = rightsensor + leftsensor + rearsensor
 
-        valid_readings = [r for r in combined if r != 0]
+        # valid_readings = [r for r in combined if r != 0]
 
-        if valid_readings:
-            out_range = min(valid_readings)
-        else:
-            out_range = float('inf')
+        # if valid_readings:
+        #     out_range = min(valid_readings)
+        # else:
+        #     out_range = float('inf')
+            
+        if left_min <= 0.2 and right_min > 0.2:  
+            self.publishVelocityCommand(0.0, -1.0)
 
-
-        if frontsensor <= 0.2 and frontsensor != 0:
-            self.publishVelocityCommand(0.0, 0.0)
-        elif out_range <= 0.2 and out_range != 0:
+        elif right_min <= 0.2 and left_min > 0.2:
             self.publishVelocityCommand(0.0, 1.0)
-            print(f"Out_range detected: {out_range}")
+
+        elif left_min <= 0.2 and right_min <= 0.2:
+            self.publishVelocityCommand(0.0, 0.0)
+
         else:
-            self.publishVelocityCommand(0.0, 0.2)
+            self.publishVelocityCommand(0.0, 0.0)
+
+        # if frontsensor <= 0.2 and frontsensor != 0:
+            # self.publishVelocityCommand(0.0, 0.0)
+        # elif out_range <= 0.2 and out_range != 0:
+        #     self.publishVelocityCommand(0.0, 1.0)
+        #     print(f"Out_range detected: {out_range}")
+        # else:
+        #     self.publishVelocityCommand(0.0, 0.2)
 
 
 def robotStop():
