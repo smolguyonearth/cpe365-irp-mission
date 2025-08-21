@@ -9,6 +9,8 @@ from sensor_msgs.msg import LaserScan, BatteryState
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 
+import math
+
 from time import sleep
 #from std_msgs.msg import String
 
@@ -62,13 +64,37 @@ class Turtlebot3Controller(Node):
             'angularVelocity':msg.twist.twist.angular,
         }
 
+
+    def to_euler_yaw(self, q):
+        # https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+        # follow c++ source code in Quaternion to Euler angles (in 3-2-1 sequence) conversion
+        # in case of right/left, we need yaw, which is yaw (z-axis rotation)
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        return math.degrees(math.atan2(siny_cosp, cosy_cosp))
+    
+    def TurnTo(self, tenth):
+        angle = self.to_euler_yaw(self.valueOdometry['orientation'])
+        print(f"Current angle: {angle}")
+
+        # if angle != tenth/10.0: # do not touch naa, it's not finished
+        #     if tenth/10.0 > 0:
+        #         self.publishVelocityCommand(0.0, 0.5)
+        #     else:
+        #         self.publishVelocityCommand(0.0, -0.5)
+        # else:
+        #     self.publishVelocityCommand(0.0, 0.0)
+
     def timerCallback(self):
         print("-----------------------------------------------------------")
         print('timer triggered')
         # self.publishVelocityCommand(linearVelocity,angularVelocity)
         # self.publishVelocityCommand(0.0, 0.08)
 
-        print("Basecode!")
+        print("TurnTo!")
+        self.TurnTo(100)
+
+        # print(self.valueLaserRaw.ranges[0])
 
 def robotStop():
     node = rclpy.create_node('tb3Stop')
