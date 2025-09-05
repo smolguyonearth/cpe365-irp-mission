@@ -34,9 +34,39 @@ class Turtlebot3Controller(Node):
             'linearVelocity':None,  #Datatype: geometry_msg/Vector3 (x,y,z)
             'angularVelocity':None, #Datatype: geometry_msg/Vector3 (x,y,z)
         }
+
+        self.sequence = [
+            ('go', 300),
+            ('turn', -1210),
+            ('go', 250),
+            ('turn', 270),
+            ('go', 50),
+            ('turn', -450),
+            ('go', 50),
+            ('turn', -650),
+            ('go', 100),
+            ('turn', -850),
+            ('go', 100),
+            ('turn', -500),
+            ('go', 120)
+        ]
+
+        #sequencing
+        self.seq_index = 0 
+        self.seq_in_progress = False
+        self.start_x = 0.0
+        self.start_y = 0.0
+        self.target_angle = 0.0
+
+        #added
+        self.current_yaw = 0.0
+        self.current_x = 0.0
+        self.current_y = 0.0
+
+        self.x_offset = None
+        self.y_offset = None
+        self.yaw_offset = None
         
-        self.state = 0
-        #Use this timer for the job that should be looping until interrupted
         self.timer = self.create_timer(0.1,self.timerCallback)
 
     def publishVelocityCommand(self, linearVelocity, angularVelocity):
@@ -44,7 +74,9 @@ class Turtlebot3Controller(Node):
         msg.linear.x = linearVelocity * 1.0
         msg.angular.z = angularVelocity * 1.0
         self.cmdVelPublisher.publish(msg)
-        #self.get_logger().info('Publishing cmd_vel: "%s", "%s"' % linearVelocity, angularVelocity)
+
+        #added
+        self.get_logger().info(f'Publishing cmd_vel: linear={linearVelocity:.2f}, angular={angularVelocity:.2f}')
 
     def scanCallback(self, msg):
         self.valueLaserRaw = {
@@ -64,37 +96,150 @@ class Turtlebot3Controller(Node):
             'angularVelocity':msg.twist.twist.angular,
         }
 
-
-    def to_euler_yaw(self, q):
-        # https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-        # follow c++ source code in Quaternion to Euler angles (in 3-2-1 sequence) conversion
-        # in case of right/left, we need yaw, which is yaw (z-axis rotation)
+        #added
+        #too yaw euler angles
+        q = msg.pose.pose.orientation
         siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
         cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        return math.degrees(math.atan2(siny_cosp, cosy_cosp))
-    
-    def TurnTo(self, tenth):
-        angle = self.to_euler_yaw(self.valueOdometry['orientation'])
-        print(f"Current angle: {angle}")
+        yaw = math.atan2(siny_cosp, cosy_cosp)
 
-        # if angle != tenth/10.0: # do not touch naa, it's not finished
-        #     if tenth/10.0 > 0:
-        #         self.publishVelocityCommand(0.0, 0.5)
-        #     else:
-        #         self.publishVelocityCommand(0.0, -0.5)
-        # else:
-        #     self.publishVelocityCommand(0.0, 0.0)
+        # reset coordinate
+        if self.x_offset is None and self.y_offset is None and self.yaw_offset is None:
+            self.x_offset = msg.pose.pose.position.x
+            self.y_offset = msg.pose.pose.position.y
+            self.yaw_offset = yaw
+            self.get_logger().info("Odometry reset: (0,0,0) set.")
+
+        self.current_x = msg.pose.pose.position.x - self.x_offset
+        self.current_y = msg.pose.pose.position.y - self.y_offset
+        self.current_yaw = yaw - self.yaw_offset
+    
+    # def TurnTo(self, tenths_of_degrees ,angular_speed = 1.0):
+    #     start_yaw = self.current_yaw
+    #     target_angle = start_yaw + math.radians(tenths_of_degrees)
+
+    #     twist = Twist()
+    #     angle_diff = target_angle - self.current_yaw
+    #     angle_diff = math.atan2(math.sin(angle_diff), math.cos(angle_diff))  # normalize
+
+    #     if angle_diff > 0:
+    #         twist.angular.z = abs(angular_speed)
+    #         direction = "CCW (left)"
+    #     else:
+    #         twist.angular.z = -abs(angular_speed)
+    #         direction = "CW (right)"
+
+    #     self.get_logger().info(
+    #         f"Start turn: from {math.degrees(start_yaw):.1f}° "
+    #         f"to {math.degrees(target_angle):.1f}° ({direction})"
+    #     )
+
+    #     while abs(angle_diff) > 0.05:  # ~3°
+    #         # self.cmd_vel_pub.publish(twist)
+    #         self.cmdVelPublisher.publish(twist)
+
+    #         rclpy.spin_once(self, timeout_sec=0.1)
+    #         angle_diff = target_angle - self.current_yaw
+    #         angle_diff = math.atan2(math.sin(angle_diff), math.cos(angle_diff))
+
+    #     # self.stop_robot()
+    #     self.publishVelocityCommand(0.0, 0.0)
+
+    #     self.get_logger().info("Turn complete ")
+    def TurnTo_step(self, target_angle, angular_speed=0.5):
+        angle_diff = target_angle - self.current_yaw
+        angle_diff = math.atan2(math.sin(angle_diff), math.cos(angle_diff))
+        if abs(angle_diff) > 0.05:
+            twist = Twist()
+            twist.angular.z = angular_speed if angle_diff > 0 else -angular_speed
+            self.cmdVelPublisher.publish(twist)
+            return False
+        else:
+            self.publishVelocityCommand(0.0, 0.0)
+            return True
+
+    # def GoTo(self, tenths_of_cm):
+    #     distance = tenths_of_cm / 1000.0
+    #     start_x, start_y = self.current_x, self.current_y
+    #     twist = Twist()
+
+    #     speed = 0.5 if abs(distance) > 0.2 else 0.2
+
+    #     if distance > 0:
+    #         twist.linear.x = speed   # forward
+    #     else:
+    #         twist.linear.x = -speed  # backward
+
+    #     while True:
+    #         # self.cmd_vel_pub.publish(twist)
+    #         self.cmdVelPublisher.publish(twist)
+
+    #         rclpy.spin_once(self, timeout_sec=0.1)
+
+    #         dx = self.current_x - start_x
+    #         dy = self.current_y - start_y
+    #         traveled = math.sqrt(dx*dx + dy*dy)
+
+    #         self.get_logger().info(
+    #             f"Moving... target={distance:.2f}m, traveled={traveled:.2f}m, "
+    #             f"pos=({self.current_x:.2f},{self.current_y:.2f})"
+    #         )
+
+    #         if abs(traveled - abs(distance)) <= 0.01 or traveled >= abs(distance):
+    #             break 
+
+    #     # self.stop_robot()
+    #     self.publishVelocityCommand(0.0, 0.0)
+    #     rclpy.spin_once(self, timeout_sec=0.1)
+
+    def GoTo_step(self, distance_m, speed=0.3):
+        dx = self.current_x - self.start_x
+        dy = self.current_y - self.start_y
+        traveled = math.sqrt(dx*dx + dy*dy)
+        if traveled < distance_m:
+            twist = Twist()
+            twist.linear.x = speed
+            self.cmdVelPublisher.publish(twist)
+            return False
+        else:
+            self.publishVelocityCommand(0.0, 0.0)
+            return True
+
+
 
     def timerCallback(self):
         print("-----------------------------------------------------------")
         print('timer triggered')
-        # self.publishVelocityCommand(linearVelocity,angularVelocity)
-        # self.publishVelocityCommand(0.0, 0.08)
 
-        print("TurnTo!")
-        self.TurnTo(100)
+        if self.seq_index >= len(self.sequence):
+            self.publishVelocityCommand(0.0, 0.0)
+            return  # sequence finished
 
-        # print(self.valueLaserRaw.ranges[0])
+        command, value = self.sequence[self.seq_index]
+
+        if command == 'turn':
+            if not self.seq_in_progress:
+                self.target_angle = self.current_yaw + math.radians(value/10.0)
+                self.seq_in_progress = True
+
+            done = self.TurnTo_step(self.target_angle)
+            if done:
+                self.seq_index += 1
+                self.seq_in_progress = False
+
+        elif command == 'go':
+            if not self.seq_in_progress:
+                self.start_x = self.current_x
+                self.start_y = self.current_y
+                self.target_distance = value / 1000.0  # convert tenths of cm → meters
+                self.seq_in_progress = True
+
+            done = self.GoTo_step(self.target_distance)
+            if done:
+                self.seq_index += 1
+                self.seq_in_progress = False
+
+        print("Basecode!")
 
 def robotStop():
     node = rclpy.create_node('tb3Stop')
@@ -104,7 +249,6 @@ def robotStop():
     msg.angular.z = 0.0
     publisher.publish(msg)
             
-
 def main(args=None):
     rclpy.init(args=args)
     tb3ControllerNode = Turtlebot3Controller()
@@ -119,6 +263,7 @@ def main(args=None):
     tb3ControllerNode.destroy_node()
     robotStop()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
