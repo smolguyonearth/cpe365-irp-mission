@@ -1,0 +1,3 @@
+kivy[all]
+kivy_examples
+ffpyplayer
