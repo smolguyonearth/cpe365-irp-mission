@@ -62,10 +62,7 @@ class Turtlebot3Controller(Node):
             'angularVelocity':msg.twist.twist.angular,
         }
 
-    def timerCallback(self):
-        print("-----------------------------------------------------------")
-        print('timer triggered')
-
+    def whatdoisee(self):
         threshold = 0.2
         window = 20
         directions = [0, 270, 180, 90]
@@ -90,13 +87,19 @@ class Turtlebot3Controller(Node):
         print(" ".join(map(str, pattern)))
 
         if (pattern[0] == 1):
-            print("ahead\n")
-        elif(pattern[1] == 1):
-            print("right\n")
-        elif(pattern[2] == 1):
-            print("back\n")
-        elif(pattern[3] == 1):
-            print("left\n")
+            print("ahead")
+        if(pattern[1] == 1):
+            print("right")
+        if(pattern[2] == 1):
+            print("back")
+        if(pattern[3] == 1):
+            print("left")
+        
+
+    def timerCallback(self):
+        print("-----------------------------------------------------------")
+        print('timer triggered')
+        self.whatdoisee()
 
 
 
