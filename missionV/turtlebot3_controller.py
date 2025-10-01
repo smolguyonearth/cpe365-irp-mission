@@ -37,6 +37,10 @@ class Turtlebot3Controller(Node):
         #Use this timer for the job that should be looping until interrupted
         self.timer = self.create_timer(0.1,self.timerCallback)
 
+        # For distance tracking
+        self.last_position = None
+        self.total_distance = 0.0
+
     def publishVelocityCommand(self, linearVelocity, angularVelocity):
         msg = Twist()
         msg.linear.x = linearVelocity * 1.0
@@ -95,11 +99,74 @@ class Turtlebot3Controller(Node):
         if(pattern[3] == 1):
             print("left")
         
-
+        
     def timerCallback(self):
         print("-----------------------------------------------------------")
         print('timer triggered')
-        self.whatdoisee()
+
+
+        ranges = self.valueLaserRaw['ranges']
+        rmax = self.valueLaserRaw['range_max']
+
+        # Define sectors
+        front_sector = ranges[0:10] + ranges[-10:]  # front ±10°
+        front_right_sector = ranges[315:]  # front-right
+        front_left_sector  = ranges[0:45]     # front-left
+        right_sector = ranges[0:90]
+        left_sector  = ranges[270:]
+
+        # Distances
+        front  = min([r for r in front_sector if r != 0] or [rmax])
+        front_right = min([r for r in front_right_sector if r != 0] or [rmax])
+        front_left  = min([r for r in front_left_sector if r != 0] or [rmax])
+        right  = min([r for r in right_sector if r != 0] or [rmax])
+        left   = min([r for r in left_sector if r != 0] or [rmax])
+
+        # Print parameters
+        print(f"Front: {front:.3f} m | Front-Right: {front_right:.3f} m | Front-Left: {front_left:.3f} m")
+        print(f"Right: {right:.3f} m | Left: {left:.3f}a m | Range max: {rmax:.3f} m")
+
+        # Emergency stop if front too close
+        if front < 0.15:
+            print("FRONT OBSTACLE TOO CLOSE! STOPPING.")
+            self.publishVelocityCommand(0.0, 0.0)
+            return
+
+        # Slight turn if front-left or front-right too close
+        if front_right < 0.325:
+            print("Front-right too close, turning slightly left")
+            self.publishVelocityCommand(0.05, 0.25)  # small left turn
+            return
+        if front_left < 0.325:
+            print("Front-left too close, turning slightly right")
+            self.publishVelocityCommand(0.05, -0.25)  # small right turn
+            return
+
+        # Wall-following logic
+        if right < left:  # follow right wall
+            if front < 0.2:
+                print("Obstacle ahead, turn left")
+                self.publishVelocityCommand(0.0, 0.3)
+            else:
+                print("Wall on right, go forward")
+                self.publishVelocityCommand(0.05, 0.0)
+        else:  # follow left wall
+            if front < 0.2:
+                print("Obstacle ahead, turn right")
+                self.publishVelocityCommand(0.0, -0.3)
+            else:
+                print("Wall on left, go forward")
+                self.publishVelocityCommand(0.05, 0.0)
+
+        pos = self.valueOdometry['position']
+        if pos is not None:
+            if self.last_position is not None:
+                dx = pos.x - self.last_position.x
+                dy = pos.y - self.last_position.y
+                self.total_distance += (dx**2 + dy**2)**0.5
+            self.last_position = pos
+
+        print(f"Total distance traveled: {self.total_distance:.3f} m")
 
 
 
